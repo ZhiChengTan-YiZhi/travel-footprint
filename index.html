@@ -2165,7 +2165,7 @@ function renderMarkers() {
 
         const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(getThumbUrl(trip.photos[0])) : '';
         const photoHtml = safeSrc
-            ? `<img class="popup-img" src="${safeSrc}" alt="${escapeHtml(trip.title)}" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
+            ? `<img class="popup-img" src="${safeSrc}" ${thumbOnError(trip.photos[0])} alt="${escapeHtml(trip.title)}" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
             : `<div class="popup-img-placeholder" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">${getMarkerEmoji(trip.tags)}</div>`;
 
         const tagsHtml = trip.tags ? trip.tags.map(t => `<span class="tag tag-${escapeHtml(t)} tag-default">${TAG_EMOJI[t]||''} ${escapeHtml(t)}</span>`).join('') : '';
@@ -2263,7 +2263,7 @@ function renderSidebar() {
     list.innerHTML = filtered.map(trip => {
         const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(getThumbUrl(trip.photos[0])) : '';
         const imgHtml = safeSrc
-            ? `<img src="${safeSrc}" loading="lazy" alt="${escapeHtml(trip.title)}" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
+            ? `<img src="${safeSrc}" loading="lazy" ${thumbOnError(trip.photos[0])} alt="${escapeHtml(trip.title)}" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
             : getMarkerEmoji(trip.tags);
         const tagsHtml = (trip.tags||[]).map(t => `<span class="tag-mini">${TAG_EMOJI[t]||''} ${escapeHtml(t)}</span>`).join('');
         return `
@@ -2304,7 +2304,7 @@ function searchTrips(query) {
     resultsEl.innerHTML = matches.map(t => {
         const safeSrc = (t.photos && t.photos.length > 0) ? safePhotoSrc(getThumbUrl(t.photos[0])) : '';
         const cover = safeSrc
-            ? `<img src="${safeSrc}" style="width:100%;height:100%;object-fit:cover">`
+            ? `<img src="${safeSrc}" ${thumbOnError(t.photos[0])} style="width:100%;height:100%;object-fit:cover">`
             : `<span>${getMarkerEmoji(t.tags)}</span>`;
         const sub = [t.city || t.locationName, t.country].filter(Boolean).join(' · ');
         return `<div class="search-result-item" data-trip-id="${escapeHtml(t.id)}" onclick="selectTripFromSearch(decodeURIComponent('${encodeJsArg(t.id)}'))">
@@ -3016,7 +3016,7 @@ function renderPhotoPreview() {
         if (!sp) return '';
         return `
         <div class="photo-preview-item">
-            <img src="${sp}" alt="photo">
+            <img src="${sp}" ${thumbOnError(photo)} alt="photo">
             <div class="photo-preview-remove" onclick="removePhoto(${i})">✕</div>
         </div>
     `;
@@ -3093,6 +3093,14 @@ function getThumbUrl(url) {
     const idx = s.lastIndexOf('.');
     if (idx === -1) return s;
     return s.slice(0, idx) + '_thumb' + s.slice(idx);
+}
+
+// 缩略图加载失败时回退到原图（兼容旧照片没有缩略图的情况）；非 https 图片不加
+function thumbOnError(origUrl) {
+    const s = String(origUrl || '');
+    if (!s.startsWith('https://')) return '';
+    const esc = s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `onerror="this.onerror=null;this.src='${esc}'"`;
 }
 
 async function saveTrip() {
@@ -3229,7 +3237,7 @@ function showDetail(tripId) {
     const photosHtml = trip.photos && trip.photos.length > 1
         ? `<div class="detail-photos">${trip.photos.map((p, i) => {
             const sp = safePhotoSrc(getThumbUrl(p));
-            return sp ? `<div class="detail-photo" onclick="openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), ${i})"><img src="${sp}" loading="lazy" alt="photo"></div>` : '';
+            return sp ? `<div class="detail-photo" onclick="openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), ${i})"><img src="${sp}" loading="lazy" ${thumbOnError(p)} alt="photo"></div>` : '';
         }).join('')}</div>`
         : '';
 
@@ -3370,7 +3378,7 @@ function renderTimeline() {
         const year = parseLocalDate(trip.startDate).getFullYear();
         const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(getThumbUrl(trip.photos[0])) : '';
         const photoHtml = safeSrc
-            ? `<img class="timeline-card-img" src="${safeSrc}" loading="lazy" alt="${escapeHtml(trip.title)}" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
+            ? `<img class="timeline-card-img" src="${safeSrc}" loading="lazy" ${thumbOnError(trip.photos[0])} alt="${escapeHtml(trip.title)}" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
             : `<div class="timeline-card-img-placeholder">${getMarkerEmoji(trip.tags)}</div>`;
         const tagsHtml = (trip.tags||[]).map(t => `<span class="tag tag-${escapeHtml(t)} tag-default">${TAG_EMOJI[t]||''} ${escapeHtml(t)}</span>`).join('');
         const color = getMarkerColor(trip.tags);
