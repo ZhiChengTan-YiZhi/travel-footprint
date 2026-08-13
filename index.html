@@ -4115,7 +4115,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     loadData().then(() => {
         // 手机首次访问默认开启移动端显示（若该设置未显式保存过）
-        // 手机端为主：未显式设置过的用户一律默认手机端模式（不受窗口宽度影响）
+        // 手机端为主：首次访问一律默认手机端模式（覆盖历史旧设置）；之后尊重用户手动选择
+        try {
+            if (!localStorage.getItem('travelModeDefaulted')) {
+                store.mobileMode = true;
+                localStorage.setItem('travelModeDefaulted', '1');
+            }
+        } catch (e) { /* localStorage 不可用时忽略 */ }
         if (typeof store.mobileMode !== 'boolean') {
             store.mobileMode = true;
         }
