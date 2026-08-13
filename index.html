@@ -11,6 +11,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
     <!-- Supabase JS SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- flatpickr 日期选择器（统一年份快速切换体验） -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh.js"></script>
     <!-- Leaflet JS -->
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Google Fonts -->
@@ -771,6 +775,17 @@
         /* 未解锁时隐藏所有编辑入口，仅保留浏览功能 */
         body:not(.admin-unlocked) .admin-only { display: none !important; }
         .admin-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ========== flatpickr 日期选择器（浅色主题适配） ========== */
+        .flatpickr-calendar { font-family: var(--font); border-radius: 12px; box-shadow: var(--shadow-lg); }
+        .flatpickr-day { border-radius: 6px; }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover {
+            background: var(--primary); border-color: var(--primary);
+        }
+        .flatpickr-day.today { border-color: var(--primary); }
+        .flatpickr-monthDropdown-months, .numInputWrapper { font-size: 14px; }
+        .flatpickr-current-month { font-weight: 700; }
+        .flatpickr-weekday { color: var(--text-secondary); font-weight: 600; }
 
         /* ========== Profile: Display Settings Switch ========== */
         .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -1723,6 +1738,7 @@ let sb = null;          // Supabase 客户端
 let isAdmin = false;    // 是否已解锁管理模式
 let sbReady = false;    // 云端是否可用
 let pendingLocalMigration = null;  // 待迁移的本地旧数据（进入管理模式后触发上传）
+let fpStart = null, fpEnd = null;  // flatpickr 日期选择器实例
 
 // ========== Tag emoji mapping ==========
 const TAG_EMOJI = {
@@ -2623,6 +2639,9 @@ function openAddModal(tripId) {
             document.getElementById('cityInput').value = trip.city || '';
             document.getElementById('startDate').value = trip.startDate;
             document.getElementById('endDate').value = trip.endDate || '';
+            // flatpickr 同步显示（若已初始化）
+            if (fpStart) fpStart.setDate(trip.startDate || '', false);
+            if (fpEnd) fpEnd.setDate(trip.endDate || '', false);
             document.getElementById('description').value = trip.description || '';
             editingTags = [...(trip.tags || [])];
             editingPhotos = [...(trip.photos || [])];
@@ -2637,6 +2656,9 @@ function openAddModal(tripId) {
         document.getElementById('cityInput').value = '';
         document.getElementById('startDate').value = '';
         document.getElementById('endDate').value = '';
+        // flatpickr 清空（若已初始化）
+        if (fpStart) fpStart.clear();
+        if (fpEnd) fpEnd.clear();
         document.getElementById('description').value = '';
         editingTags = [];
         editingPhotos = [];
@@ -4105,6 +4127,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('adminModal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closeAdminModal();
     });
+
+    // Init: 初始化日期选择器（统一年份快速切换体验，所有浏览器一致）
+    try {
+        if (window.flatpickr) {
+            const fpOpts = {
+                dateFormat: 'Y-m-d',
+                locale: (window.flatpickr.l10ns && window.flatpickr.l10ns.zh) || undefined,
+                disableMobile: true,   // 移动端也使用统一日历，不降级原生控件
+                allowInput: false,
+                monthSelectorType: 'dropdown',  // 年份/月份下拉选择，可快速跳年
+                prevArrow: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3l-5 5 5 5z"/></svg>',
+                nextArrow: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6 3l5 5-5 5z"/></svg>'
+            };
+            fpStart = flatpickr('#startDate', fpOpts);
+            fpEnd = flatpickr('#endDate', fpOpts);
+        }
+    } catch (e) { console.warn('日期选择器初始化失败（不影响使用原生控件）:', e); }
 
     // Init: 先初始化云端连接（失败不阻塞页面，自动降级为本地模式），再加载数据渲染地图
     try {
