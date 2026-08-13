@@ -3196,6 +3196,8 @@ async function saveTrip() {
             const { error } = await sb.from('footprints').insert(row);
             if (error) throw error;
             showToast('足迹已添加');
+            // 新增足迹同步进本地列表（否则左侧列表不更新，需手动刷新页面才出现）
+            store.trips.push(trip);
         }
         // 自己已更新本地与界面，2 秒内忽略实时事件，避免重复全量刷新
         window.__skipRealtimeUntil = Date.now() + 2000;
