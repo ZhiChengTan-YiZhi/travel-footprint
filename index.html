@@ -3688,6 +3688,8 @@ function applyMobileMode(on) {
 
 function toggleMobileMode(on) {
     store.mobileMode = !!on;
+    // 用户手动切换过 → 之后尊重用户选择，不再强制默认
+    try { localStorage.setItem('travelModeUserSet', '1'); } catch (e) {}
     saveData();
     applyMobileMode(on);
     showToast(on ? '已切换到移动端显示' : '已切换到电脑端显示');
@@ -4154,11 +4156,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     loadData().then(() => {
         // 手机首次访问默认开启移动端显示（若该设置未显式保存过）
-        // 手机端为主：首次访问一律默认手机端模式（覆盖历史旧设置）；之后尊重用户手动选择
+        // 手机端为主：只要用户从未手动切换过显示模式，一律默认手机端（每次加载都生效并持久化）
         try {
-            if (!localStorage.getItem('travelModeDefaulted')) {
+            if (!localStorage.getItem('travelModeUserSet')) {
                 store.mobileMode = true;
-                localStorage.setItem('travelModeDefaulted', '1');
+                saveData();
             }
         } catch (e) { /* localStorage 不可用时忽略 */ }
         if (typeof store.mobileMode !== 'boolean') {
