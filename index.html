@@ -2973,6 +2973,11 @@ function compressImage(file, maxWidth, callback) {
                 canvas.height = h;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
+                // 优先输出 WebP（体积约比 JPEG 小一半）；浏览器不支持时自动回退 JPEG
+                try {
+                    const webp = canvas.toDataURL('image/webp', quality);
+                    if (webp.indexOf('data:image/webp') === 0) return webp;
+                } catch (e) { /* 回退 JPEG */ }
                 return canvas.toDataURL('image/jpeg', quality);
             };
             // 分级降质：优先最长边 maxWidth/0.75（默认 1600px 高清）；超大图逐级降低尺寸与质量
@@ -3063,6 +3068,11 @@ function generateThumb(dataUrl, maxSide = 200) {
                 const c = document.createElement('canvas');
                 c.width = w; c.height = h;
                 c.getContext('2d').drawImage(img, 0, 0, w, h);
+                // 优先 WebP 缩略图（更小）；不支持时回退 JPEG
+                try {
+                    const webp = c.toDataURL('image/webp', 0.7);
+                    if (webp.indexOf('data:image/webp') === 0) { resolve(webp); return; }
+                } catch (e) { /* 回退 JPEG */ }
                 resolve(c.toDataURL('image/jpeg', 0.7));
             } catch (e) { resolve(dataUrl); }
         };
@@ -3075,13 +3085,16 @@ function generateThumb(dataUrl, maxSide = 200) {
 async function uploadPhotoWithThumb(p, tripId, i) {
     if (typeof p !== 'string' || !p.startsWith('data:image/')) return p;
     const blob = dataUrlToBlob(p);
-    const ext = (blob.type === 'image/png') ? 'png' : 'jpg';
+    const mime = (blob.type || 'image/jpeg').toLowerCase();
+    const ext = mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg');
     const base = `${tripId}/${Date.now()}-${i}`;
     const thumbDataUrl = await generateThumb(p);
     const thumbBlob = dataUrlToBlob(thumbDataUrl);
+    const thumbMime = (thumbBlob.type || 'image/jpeg').toLowerCase();
+    const thumbExt = thumbMime === 'image/webp' ? 'webp' : 'jpg';
     const [r1, r2] = await Promise.all([
-        sb.storage.from(PHOTO_BUCKET).upload(`${base}.${ext}`, blob, { contentType: blob.type, upsert: true }),
-        sb.storage.from(PHOTO_BUCKET).upload(`${base}_thumb.jpg`, thumbBlob, { contentType: 'image/jpeg', upsert: true })
+        sb.storage.from(PHOTO_BUCKET).upload(`${base}.${ext}`, blob, { contentType: blob.type, upsert: true, cacheControl: '31536000' }),
+        sb.storage.from(PHOTO_BUCKET).upload(`${base}_thumb.${thumbExt}`, thumbBlob, { contentType: thumbMime, upsert: true, cacheControl: '31536000' })
     ]);
     if (r1.error) throw r1.error;
     if (r2.error) throw r2.error;
