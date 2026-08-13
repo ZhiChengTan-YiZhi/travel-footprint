@@ -3944,6 +3944,7 @@ function closeAdminModal() {
 }
 
 async function adminLogin() {
+    if (!sb) { showToast('云端连接不可用，请检查网络后重试'); return; }
     const email = ADMIN_EMAIL;
     const password = document.getElementById('adminPasswordInput').value;
     const errEl = document.getElementById('adminError');
@@ -4103,8 +4104,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === e.currentTarget) closeAdminModal();
     });
 
-    // Init: 先初始化云端连接，再等异步加载完成渲染，确保 store 已就绪
-    initSupabase();
+    // Init: 先初始化云端连接（失败不阻塞页面，自动降级为本地模式），再加载数据渲染地图
+    try {
+        initSupabase();
+    } catch (e) {
+        console.warn('Supabase 初始化失败，进入本地模式:', e);
+        sb = null;
+    }
     loadData().then(() => {
         // 手机首次访问默认开启移动端显示（若该设置未显式保存过）
         // 手机端为主：未显式设置过的用户一律默认手机端模式（不受窗口宽度影响）
