@@ -1646,7 +1646,7 @@
             <button class="btn btn-danger" id="deleteBtn" style="display:none" onclick="deleteTrip()">🗑️ 删除</button>
             <div style="flex:1"></div>
             <button class="btn btn-ghost" onclick="closeAddModal()">取消</button>
-            <button class="btn btn-primary" onclick="saveTrip()">保存足迹</button>
+            <button class="btn btn-primary" id="saveTripBtn" onclick="saveTrip()">保存足迹</button>
         </div>
     </div>
 </div>
@@ -2163,7 +2163,7 @@ function renderMarkers() {
             icon: createMarkerIcon(trip)
         }).addTo(map);
 
-        const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(trip.photos[0]) : '';
+        const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(getThumbUrl(trip.photos[0])) : '';
         const photoHtml = safeSrc
             ? `<img class="popup-img" src="${safeSrc}" alt="${escapeHtml(trip.title)}" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
             : `<div class="popup-img-placeholder" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">${getMarkerEmoji(trip.tags)}</div>`;
@@ -2261,9 +2261,9 @@ function renderSidebar() {
     }
 
     list.innerHTML = filtered.map(trip => {
-        const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(trip.photos[0]) : '';
+        const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(getThumbUrl(trip.photos[0])) : '';
         const imgHtml = safeSrc
-            ? `<img src="${safeSrc}" alt="${escapeHtml(trip.title)}" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
+            ? `<img src="${safeSrc}" loading="lazy" alt="${escapeHtml(trip.title)}" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
             : getMarkerEmoji(trip.tags);
         const tagsHtml = (trip.tags||[]).map(t => `<span class="tag-mini">${TAG_EMOJI[t]||''} ${escapeHtml(t)}</span>`).join('');
         return `
@@ -2302,7 +2302,7 @@ function searchTrips(query) {
         return;
     }
     resultsEl.innerHTML = matches.map(t => {
-        const safeSrc = (t.photos && t.photos.length > 0) ? safePhotoSrc(t.photos[0]) : '';
+        const safeSrc = (t.photos && t.photos.length > 0) ? safePhotoSrc(getThumbUrl(t.photos[0])) : '';
         const cover = safeSrc
             ? `<img src="${safeSrc}" style="width:100%;height:100%;object-fit:cover">`
             : `<span>${getMarkerEmoji(t.tags)}</span>`;
@@ -3012,7 +3012,7 @@ function handlePhotoUpload(event) {
 function renderPhotoPreview() {
     const grid = document.getElementById('photoPreview');
     grid.innerHTML = editingPhotos.map((photo, i) => {
-        const sp = safePhotoSrc(photo);
+        const sp = safePhotoSrc(getThumbUrl(photo));
         if (!sp) return '';
         return `
         <div class="photo-preview-item">
@@ -3045,6 +3045,54 @@ function dataUrlToBlob(dataUrl) {
     const arr = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     return new Blob([arr], { type: mime });
+}
+
+// 生成缩略图（最长边 200px 的 JPEG）—— 用于列表/弹窗等小图，加快页面加载
+function generateThumb(dataUrl, maxSide = 200) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            try {
+                let w = img.width, h = img.height;
+                if (!w || !h) { resolve(dataUrl); return; }
+                if (w > maxSide) { h = Math.round(h * maxSide / w); w = maxSide; }
+                const c = document.createElement('canvas');
+                c.width = w; c.height = h;
+                c.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(c.toDataURL('image/jpeg', 0.7));
+            } catch (e) { resolve(dataUrl); }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
+// 上传一张照片（原图 + 缩略图并发上传），返回原图 public URL；非 base64 直接返回原值
+async function uploadPhotoWithThumb(p, tripId, i) {
+    if (typeof p !== 'string' || !p.startsWith('data:image/')) return p;
+    const blob = dataUrlToBlob(p);
+    const ext = (blob.type === 'image/png') ? 'png' : 'jpg';
+    const base = `${tripId}/${Date.now()}-${i}`;
+    const thumbDataUrl = await generateThumb(p);
+    const thumbBlob = dataUrlToBlob(thumbDataUrl);
+    const [r1, r2] = await Promise.all([
+        sb.storage.from(PHOTO_BUCKET).upload(`${base}.${ext}`, blob, { contentType: blob.type, upsert: true }),
+        sb.storage.from(PHOTO_BUCKET).upload(`${base}_thumb.jpg`, thumbBlob, { contentType: 'image/jpeg', upsert: true })
+    ]);
+    if (r1.error) throw r1.error;
+    if (r2.error) throw r2.error;
+    const { data: { publicUrl } } = sb.storage.from(PHOTO_BUCKET).getPublicUrl(`${base}.${ext}`);
+    return publicUrl;
+}
+
+// 从原图 URL 派生缩略图 URL（约定：文件名加 _thumb 后缀）
+function getThumbUrl(url) {
+    const s = String(url || '');
+    if (!s.startsWith('https://') || s.indexOf('/footprint-photos/') === -1) return s;
+    if (s.indexOf('_thumb.') !== -1) return s;
+    const idx = s.lastIndexOf('.');
+    if (idx === -1) return s;
+    return s.slice(0, idx) + '_thumb' + s.slice(idx);
 }
 
 async function saveTrip() {
@@ -3105,23 +3153,12 @@ async function saveTrip() {
         };
     }
 
+    // 保存按钮 loading 状态（避免重复点击，提示正在保存）
+    const saveBtn = document.getElementById('saveTripBtn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ 保存中…'; }
     try {
-        // 上传 base64 照片到云端存储（已上传过的 https 链接直接复用）
-        const newPhotos = [];
-        for (let i = 0; i < trip.photos.length; i++) {
-            const p = trip.photos[i];
-            if (typeof p === 'string' && p.startsWith('data:image/')) {
-                const blob = dataUrlToBlob(p);
-                const ext = (blob.type === 'image/png') ? 'png' : 'jpg';
-                const path = `${trip.id}/${Date.now()}-${i}.${ext}`;
-                const { error: upErr } = await sb.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: blob.type, upsert: true });
-                if (upErr) throw upErr;
-                const { data: { publicUrl } } = sb.storage.from(PHOTO_BUCKET).getPublicUrl(path);
-                newPhotos.push(publicUrl);
-            } else {
-                newPhotos.push(p);
-            }
-        }
+        // 并发上传 base64 照片（原图+缩略图），已上传过的 https 链接直接复用
+        const newPhotos = await Promise.all(trip.photos.map((p, i) => uploadPhotoWithThumb(p, trip.id, i)));
         trip.photos = newPhotos;
 
         // 写入云端
@@ -3135,11 +3172,15 @@ async function saveTrip() {
             if (error) throw error;
             showToast('足迹已添加');
         }
+        // 自己已更新本地与界面，2 秒内忽略实时事件，避免重复全量刷新
+        window.__skipRealtimeUntil = Date.now() + 2000;
     } catch (err) {
         console.error('保存失败:', err);
         showToast('保存失败：' + (err.message || '云端写入失败，请先进入管理模式'));
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 保存足迹'; }
         return;
     }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 保存足迹'; }
 
     saveData();
     closeAddModal();
@@ -3187,8 +3228,8 @@ function showDetail(tripId) {
     const tagsHtml = (trip.tags||[]).map(t => `<span class="tag tag-${escapeHtml(t)} tag-default">${TAG_EMOJI[t]||''} ${escapeHtml(t)}</span>`).join('');
     const photosHtml = trip.photos && trip.photos.length > 1
         ? `<div class="detail-photos">${trip.photos.map((p, i) => {
-            const sp = safePhotoSrc(p);
-            return sp ? `<div class="detail-photo" onclick="openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), ${i})"><img src="${sp}" alt="photo"></div>` : '';
+            const sp = safePhotoSrc(getThumbUrl(p));
+            return sp ? `<div class="detail-photo" onclick="openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), ${i})"><img src="${sp}" loading="lazy" alt="photo"></div>` : '';
         }).join('')}</div>`
         : '';
 
@@ -3327,9 +3368,9 @@ function renderTimeline() {
 
     timeline.innerHTML = sorted.map(trip => {
         const year = parseLocalDate(trip.startDate).getFullYear();
-        const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(trip.photos[0]) : '';
+        const safeSrc = trip.photos && trip.photos.length > 0 ? safePhotoSrc(getThumbUrl(trip.photos[0])) : '';
         const photoHtml = safeSrc
-            ? `<img class="timeline-card-img" src="${safeSrc}" alt="${escapeHtml(trip.title)}" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
+            ? `<img class="timeline-card-img" src="${safeSrc}" loading="lazy" alt="${escapeHtml(trip.title)}" style="cursor:pointer" onclick="event.stopPropagation();openTripLightbox(decodeURIComponent('${encodeJsArg(trip.id)}'), 0)">`
             : `<div class="timeline-card-img-placeholder">${getMarkerEmoji(trip.tags)}</div>`;
         const tagsHtml = (trip.tags||[]).map(t => `<span class="tag tag-${escapeHtml(t)} tag-default">${TAG_EMOJI[t]||''} ${escapeHtml(t)}</span>`).join('');
         const color = getMarkerColor(trip.tags);
@@ -3941,8 +3982,10 @@ function initSupabase() {
     });
     // 实时同步：任何设备 / 任何来源对数据表的增删改都会自动刷新页面
     try {
+        window.__skipRealtimeUntil = 0; // 自己操作后 2 秒内忽略实时事件，避免重复全量刷新
         sb.channel('footprints-sync')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'footprints' }, () => {
+                if (Date.now() < window.__skipRealtimeUntil) return;
                 refreshTripsFromCloud().then(() => {
                     renderMarkers();
                     renderSidebar();
