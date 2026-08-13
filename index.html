@@ -2975,16 +2975,20 @@ function compressImage(file, maxWidth, callback) {
                 ctx.drawImage(img, 0, 0, w, h);
                 return canvas.toDataURL('image/jpeg', quality);
             };
-            // 分级降质：优先最长边 maxWidth/0.75
+            // 分级降质：优先最长边 maxWidth/0.75（默认 1600px 高清）；超大图逐级降低尺寸与质量
             let dataUrl = doCompress(maxWidth, 0.75);
-            // 输出 base64 仍超约 1MB → 再以 600/0.5 重压
-            if (dataUrl.length > 1024 * 1024) {
-                dataUrl = doCompress(600, 0.5);
-            }
-            // 仍超约 2MB → 拒绝该图并提示（避免撑爆 localStorage）
+            // 输出 base64 仍超约 2MB → 再以 1200/0.55 重压
             if (dataUrl.length > 2 * 1024 * 1024) {
+                dataUrl = doCompress(1200, 0.55);
+            }
+            // 仍超约 3MB → 再以 800/0.5 重压（保底，尽量不丢图）
+            if (dataUrl.length > 3 * 1024 * 1024) {
+                dataUrl = doCompress(800, 0.5);
+            }
+            // 仍超约 3.5MB → 拒绝该图并提示
+            if (dataUrl.length > 3.5 * 1024 * 1024) {
                 callback(null);
-                showToast('图片过大，已跳过（单张压缩后需小于 2MB）');
+                showToast('图片过大，已跳过（单张压缩后需小于 3.5MB）');
                 return;
             }
             callback(dataUrl);
@@ -2999,7 +3003,7 @@ function compressImage(file, maxWidth, callback) {
 function handlePhotoUpload(event) {
     const files = event.target.files;
     Array.from(files).forEach(file => {
-        compressImage(file, 800, (compressed) => {
+        compressImage(file, 1600, (compressed) => {
             if (compressed) {
                 editingPhotos.push(compressed);
                 renderPhotoPreview();
@@ -4037,7 +4041,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const files = e.dataTransfer.files;
             Array.from(files).forEach(file => {
                 if (file.type.startsWith('image/')) {
-                    compressImage(file, 800, (compressed) => {
+                    compressImage(file, 1600, (compressed) => {
                         if (compressed) {
                             editingPhotos.push(compressed);
                             renderPhotoPreview();
