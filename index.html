@@ -2010,7 +2010,7 @@ function initMap() {
         worldCopyJump: true
     }).setView([35, 105], 3);
 
-    mapLayers.light = L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=8', {
+    mapLayers.light = L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7', {
         attribution: '&copy; 高德地图 GS(2024)1234号',
         subdomains: '1234',
         maxZoom: 18
@@ -2677,7 +2677,7 @@ function initModalMap() {
     const center = editingCoords ? [editingCoords.lat, editingCoords.lon] : [35, 105];
     const zoom = editingCoords ? 10 : 3;
     modalMap = L.map('modalMap', { minZoom: 3, maxZoom: 18 }).setView(center, zoom);
-    L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=8', {
+    L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7', {
         attribution: '&copy; 高德地图 GS(2024)1234号',
         subdomains: '1234',
         maxZoom: 18
