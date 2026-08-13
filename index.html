@@ -2010,7 +2010,7 @@ function initMap() {
         worldCopyJump: true
     }).setView([35, 105], 3);
 
-    mapLayers.light = L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7', {
+    mapLayers.light = L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=8', {
         attribution: '&copy; 高德地图 GS(2024)1234号',
         subdomains: '1234',
         maxZoom: 18
@@ -2677,7 +2677,7 @@ function initModalMap() {
     const center = editingCoords ? [editingCoords.lat, editingCoords.lon] : [35, 105];
     const zoom = editingCoords ? 10 : 3;
     modalMap = L.map('modalMap', { minZoom: 3, maxZoom: 18 }).setView(center, zoom);
-    L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7', {
+    L.tileLayer('https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=8', {
         attribution: '&copy; 高德地图 GS(2024)1234号',
         subdomains: '1234',
         maxZoom: 18
@@ -4107,8 +4107,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initSupabase();
     loadData().then(() => {
         // 手机首次访问默认开启移动端显示（若该设置未显式保存过）
+        // 手机端为主：未显式设置过的用户一律默认手机端模式（不受窗口宽度影响）
         if (typeof store.mobileMode !== 'boolean') {
-            store.mobileMode = window.innerWidth <= 768;
+            store.mobileMode = true;
         }
         initMap();
         applyMobileMode(store.mobileMode);
